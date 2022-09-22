@@ -4,15 +4,13 @@ import io.github.elizabethlfransen.languageclient.packet.*;
 import io.github.elizabethlfransen.languageclient.util.LambdaUtil;
 import org.jline.reader.LineReader;
 import org.jline.reader.LineReaderBuilder;
+import org.jline.reader.UserInterruptException;
 import org.jline.utils.AttributedString;
 
-import java.io.Closeable;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
+import java.io.*;
 import java.net.InetAddress;
 import java.net.Socket;
-import java.util.Scanner;
+import java.net.SocketException;
 import java.util.Vector;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -41,9 +39,15 @@ public class LanguageClient implements Closeable {
     }
 
     private void readPackets() throws IOException {
-        while (!socket.isClosed()) {
-            LanguagePacket packet = packetReader.nextPacket();
-            handlePacket(packet);
+        try {
+            while (!socket.isClosed()) {
+                LanguagePacket packet = packetReader.nextPacket();
+                handlePacket(packet);
+            }
+        } catch (SocketException e) {
+            if(!e.getMessage().equals("Socket closed"))
+                throw e;
+        } catch (EOFException ignored) {
         }
     }
 
@@ -103,8 +107,13 @@ public class LanguageClient implements Closeable {
                 .highlighter(new LanguageClientHighlighter(client))
                 .build();
         while(true) {
-            String line = reader.readLine();
-            client.interpret(line);
+            try {
+                String line = reader.readLine("$ ");
+                client.interpret(line);
+            } catch (UserInterruptException ignored) {
+                client.close();
+                break;
+            }
         }
     }
 
